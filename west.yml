@@ -1,0 +1,12 @@
+manifest:
+
+  projects:
+    - name: zephyr
+      url: https://github.com/zephyrproject-rtos/zephyr.git
+      revision: main
+      path: zephyr
+      west-commands: scripts/west-commands.yml
+      import:
+        name-allowlist:
+          - cmsis
+          - cmsis_6
