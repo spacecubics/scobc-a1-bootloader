@@ -1,0 +1,15 @@
+mainmenu "SC-OBC Module A1 Bootloader"
+
+menu "Bootloader"
+
+config SCOBC_A1_BOOT_CFG_COPY_SIZE_KB
+	int "The size (in Kbytes) that the bootloader copies from config memory to HRMEM"
+	default 1024
+	help
+	  The size (in Kbytes) that the bootloader copies from config memory to HRMEM.
+
+endmenu
+
+menu "Zephyr"
+source "Kconfig.zephyr"
+endmenu
