@@ -57,6 +57,8 @@
 #define SCQSPI_NOR_FLASH_DUMMY_CYCLE_COUNT (4U)
 #define SCQSPI_SPI_MODE_QUAD               (0x00020000)
 #define SCQSPI_BOOTSTS_FALLBACK            BIT(1)
+#define SCQSPI_ALL_MASK                    GENMASK(31, 0)
+#define SYSREG_CFGMEMSEL_MON_MASK          GENMASK(5, 4) /* CFGMEMSEL and CFGMEMMON bits mask */
 
 #define SCQSPI_REG_READ_RETRY(count) (count)
 
@@ -65,11 +67,12 @@ static inline void write32(uint32_t addr, uint32_t val)
 	sys_write32(val, addr);
 }
 
-static bool verify(uint32_t addr, uint32_t exp, uint32_t retry)
+static bool verify(uint32_t addr, uint32_t exp, uint32_t read_mask, uint32_t retry)
 {
 	uint32_t regval;
 
-	regval = sys_read32(addr);
+	regval = sys_read32(addr) & read_mask;
+
 	if (regval == exp) {
 		return true;
 	} else if (retry == 0) {
@@ -77,7 +80,7 @@ static bool verify(uint32_t addr, uint32_t exp, uint32_t retry)
 	}
 
 	for (uint32_t i = 0; i < retry; i++) {
-		regval = sys_read32(addr);
+		regval = sys_read32(addr) & read_mask;
 		if (regval == exp) {
 			return true;
 		} else if (i + 1 == retry) {
@@ -104,7 +107,7 @@ static bool qspi_select_mem(uint32_t base, uint8_t mem_no, uint32_t *spi_ss)
 		if (mem_no == SC_DATA_MEM0) {
 			/* Select Config Memory 0 */
 			write32(SCOBCA1_FPGA_SYSREG_CFGMEMCTL, 0x00);
-			if (!verify(SCOBCA1_FPGA_SYSREG_CFGMEMCTL, 0x00,
+			if (!verify(SCOBCA1_FPGA_SYSREG_CFGMEMCTL, 0x00, SYSREG_CFGMEMSEL_MON_MASK,
 				    SCQSPI_REG_READ_RETRY(100000))) {
 				printk("!!! Can not select Config Memory %d\n", mem_no);
 				return false;
@@ -112,7 +115,7 @@ static bool qspi_select_mem(uint32_t base, uint8_t mem_no, uint32_t *spi_ss)
 		} else {
 			/* Select Config Memory 1 */
 			write32(SCOBCA1_FPGA_SYSREG_CFGMEMCTL, 0x10);
-			if (!verify(SCOBCA1_FPGA_SYSREG_CFGMEMCTL, 0x30,
+			if (!verify(SCOBCA1_FPGA_SYSREG_CFGMEMCTL, 0x30, SYSREG_CFGMEMSEL_MON_MASK,
 				    SCQSPI_REG_READ_RETRY(100000))) {
 				printk("!!! Can not select Config Memory %d\n", mem_no);
 				return false;
@@ -133,7 +136,7 @@ static bool qspi_select_mem(uint32_t base, uint8_t mem_no, uint32_t *spi_ss)
 static bool is_qspi_idle(uint32_t base)
 {
 	/* Confirm QSPI Access Status is `Idle` */
-	if (!verify(SCOBCA1_FPGA_NORFLASH_QSPI_ASR(base), SCQSPI_ASR_IDLE,
+	if (!verify(SCOBCA1_FPGA_NORFLASH_QSPI_ASR(base), SCQSPI_ASR_IDLE, SCQSPI_ALL_MASK,
 		    SCQSPI_REG_READ_RETRY(10))) {
 		printk("QSPI (Data Memory) is busy, so exit\n");
 		return false;
@@ -212,13 +215,15 @@ static bool read_rx_data(uint32_t base, size_t read_size, uint8_t *read_vals)
 static bool is_qspi_control_done(uint32_t base)
 {
 	/* Confirm QSPI Interrupt Stauts is `SPI Control Done` */
-	if (!verify(SCOBCA1_FPGA_NORFLASH_QSPI_ISR(base), 0x01, SCQSPI_REG_READ_RETRY(10))) {
+	if (!verify(SCOBCA1_FPGA_NORFLASH_QSPI_ISR(base), 0x01, SCQSPI_ALL_MASK,
+		    SCQSPI_REG_READ_RETRY(10))) {
 		return false;
 	}
 
 	/* Clear QSPI Interrupt Stauts */
 	write32(SCOBCA1_FPGA_NORFLASH_QSPI_ISR(base), 0x01);
-	if (!verify(SCOBCA1_FPGA_NORFLASH_QSPI_ISR(base), 0x00, SCQSPI_REG_READ_RETRY(10))) {
+	if (!verify(SCOBCA1_FPGA_NORFLASH_QSPI_ISR(base), 0x00, SCQSPI_ALL_MASK,
+		    SCQSPI_REG_READ_RETRY(10))) {
 		return false;
 	}
 
